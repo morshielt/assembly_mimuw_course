@@ -1,8 +1,7 @@
 all: game
 
 game: gamemain.c game.o
-	gcc -o game -g gamemain.c game.o -no-pie
-	# TODO: usunąć  -g
+	gcc -o game gamemain.c game.o -no-pie
 
 .SECONDARY:
 

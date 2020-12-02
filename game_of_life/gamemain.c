@@ -6,22 +6,19 @@
 extern void start(int cols, int rows, char* T);
 extern void run(int steps);
 
-void print(char* T, int size, int cols, int shift) {
-    size_t i = 0 + shift * size / 2;
-    size -= (1 - shift) * size / 2;
+void print(char* T, int cols, int rows, int offset) {
+    // size_t offset = 0 + shift * size / 2;
 
     printf(" ");
-    for (i; i < size; i++) {
-        if (i % cols == 0 && i != 0 && i != size / 2) {
-            printf("\n ");
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < cols; j++) {
+            if (T[i * cols + j + offset] == '0')
+                printf("∙ ");
+            else
+                printf("\x1B[36m▪ \033[0m");
         }
-
-        if (T[i] == '0')
-            printf("∙ ");
-        else
-            printf("\x1B[36m▪ \033[0m");
+        printf("\n ");
     }
-    printf("\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -29,7 +26,7 @@ int main(int argc, char* argv[]) {
     FILE* file;
 
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <board_file>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -75,7 +72,7 @@ int main(int argc, char* argv[]) {
     int STOP = -1;
 
     start(cols, rows, T);
-    print(T, size, cols, ctr);
+    print(T, cols, rows, ctr * size / 2);
 
     // reading number of steps from input
     // and priniting according board
@@ -89,7 +86,7 @@ int main(int argc, char* argv[]) {
         if (steps != 0) {
             run(steps);
             ctr = (ctr + steps) % 2;
-            print(T, size, cols, ctr);
+            print(T, cols, rows, ctr * size / 2);
         }
     }
 

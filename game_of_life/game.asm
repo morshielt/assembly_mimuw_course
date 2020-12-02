@@ -1,10 +1,10 @@
-%define    r r8                  ; current row
-%define    r_iter r9             ; row iterator (-1/0/1)
-%define    c r10                 ; current column
-%define    c_iter r11            ; column iterator (-1/0/1)
-%define    next_board r12        ; position in T where `next` board starts
-%define    curr_board r13        ; position in T where the current board starts
-%define    tmp r14               ; register used for calculating cell coordinates
+%define    r r9                  ; current row
+%define    r_iter r10             ; row iterator (-1/0/1)
+%define    c r11                 ; current column
+%define    c_iter r12            ; column iterator (-1/0/1)
+%define    next_board r13        ; position in T where `next` board starts
+%define    curr_board r14        ; position in T where the current board starts
+%define    tmp r15               ; register used for calculating cell coordinates
 %define    neighbours rbx        ; number of alive neighbours of a cell
 %define    table rcx             ; holds address of T
 %define    steps rdi
@@ -19,24 +19,21 @@ section .bss
 section .data
     CTR DQ 0
 section .text
+
 start:
     mov [COLS], rdi               ; save params
     mov [ROWS], rsi
     mov [T], rdx
     ret
 
-
 run:
-    push    r8                   ; save registers
-    push    r9
-    push    r10
-    push    r11
-    push    r12
+    push    r12                   ; save registers
     push    r13
     push    r14
+    push    r15
     push    rbx
-    push   rbp
-    mov    rbp, rsp
+    push    rbp
+    mov     rbp, rsp
 
     mov table, [T]
 
@@ -134,7 +131,6 @@ eval_cell:
 
     mov [table + tmp], BYTE '1'
 
-    
 next:                            ; go check next cell in column/row
     inc c
     cmp c, [COLS]
@@ -153,12 +149,8 @@ finish:
     mov    rsp, rbp              ; restore register values
     pop    rbp
     pop    rbx
+    pop    r15
     pop    r14
     pop    r13
     pop    r12
-    pop    r11
-    pop    r10
-    pop    r9
-    pop    r8
-
     ret
