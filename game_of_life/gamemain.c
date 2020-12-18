@@ -7,8 +7,6 @@ extern void start(int cols, int rows, char* T);
 extern void run(int steps);
 
 void print(char* T, int cols, int rows, int offset) {
-    // size_t offset = 0 + shift * size / 2;
-
     printf(" ");
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {
