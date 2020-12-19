@@ -7,6 +7,17 @@
 ; %define    tmp r15               ; register used for calculating cell coordinates
 ; %define    neighbours rbx        ; number of alive neighbours of a cell
 %define    table r8             ; holds address of M
+%define    iter r9             ; holds address of M
+%define    step_vector r10            ; holds address of M
+%define    curr r11             ; holds address of M
+%define    FLOAT 4             ; holds address of M
+%define    FLOAT4 16             ; holds address of M
+%define    row_bytes r12
+%define    tmp r13
+%define    tmp2 r9
+%define    r r14
+%define    c r15
+
 ; %define    steps rdi
 
 global start, step
@@ -15,7 +26,10 @@ section .bss
     COLS RESQ 1
     ROWS RESQ 1
     M RESQ 1
+    STEP_V RESQ 1
     WEIGHT RESQ 1
+    ROW_BYTES RESQ 1
+    TMP_OFFSET RESQ 1
 ; section .data
 ;     CTR DQ 0
 section .text
@@ -30,6 +44,18 @@ start:
     mov [ROWS], rsi
     mov [M], rdx
 
+    imul rdi, FLOAT
+    mov [ROW_BYTES], rdi
+
+    xor rdx, rdx
+    mov rax, [ROWS]
+    mov rdi, 2
+    idiv rdi
+    ; inc rax
+    imul rax, [COLS]
+    imul rax, FLOAT
+    ; mov rax, QWORD 5
+    mov [TMP_OFFSET], rax
 
     mov    rsp, rbp
     pop    rbp
@@ -37,7 +63,7 @@ start:
     ret
 
 step:
-;     push    r12                   ; save registers
+    push    r8                   ; save registers
 ;     push    r13
 ;     push    r14
 ;     push    r15
@@ -45,136 +71,130 @@ step:
     push    rbp
     mov     rbp, rsp
 
+    mov [STEP_V], rdi               ; save params
+    mov step_vector, [STEP_V]
+    mov table, [M]
+
     movd xmm3, [WEIGHT] ; mov 32bits
     ; mov rax, 7
     ; mov xmm3, rax ; mov 32bits
 	shufps xmm3, xmm3, 0h ; bierze [0..31] 4 razy
 	; mask: w w w w
 	xor eax, eax ; eax = 0
+    ; mov rax, [TMP_OFFSET]
+    ; mov rax, rsi
 	cvtsi2ss xmm3, eax ; weź 0 z eax i wsadź je jako 0.000000 pod xmm [0..31]
 	; mask: 0 w w w
 	shufps xmm3, xmm3, 39h ; KUUUL, mi też są tylko trzy potrzebne XD
 	; xmm3 - w w w 0
 
-    mov r9, [M]
-	movups xmm0, [r9]
-	addps xmm0, xmm3
-    movups [r9], xmm0
 
-; step_loop:
-;     mov tmp, [COLS]              ; tmp = cols * rows
-;     imul tmp, [ROWS]
 
-;     mov curr_board, [CTR]        ; current boards shift
-;     imul curr_board, tmp 
 
-;     xor [CTR], BYTE 1            ; flip 0/1
-;     mov next_board, [CTR]        ; calculated board shift
-;     imul next_board, tmp
 
-;     mov r, 0                     ; current row = 0
+    mov row_bytes, [COLS]
+    imul row_bytes, FLOAT
 
-; rows_loop:
-;     mov c, 0                     ; current column = 0
+    mov iter, 0
+    ; TODO: wygląda jakby przepisywało dobrze ale chór wie bo mi się nie chce sprawdzać
+copy_step_v_to_table:
+    ; step_vector
 
-; cols_loop:
-;     mov neighbours, 0            ; current cell alive neighbours = 0
+    ; // przepisz 0wy wiersz
+	movups xmm0, [step_vector+iter]
+	movups [table+iter], xmm0
 
-;     mov r_iter, -1               ; neighbouring row offset = -1
-; neighbour_r_loop:                ; neighbouring rows (r-1, r, r+1)    
-;     mov tmp, r
-;     add tmp, r_iter
-;     cmp tmp, 0
-;     jl next_neighbour_row        ; r + r_iter < 0 (out of bounds)
-;     cmp tmp, [ROWS]
-;     jge next_neighbour_row       ; r + r_iter >= ROWS (out of bounds)
+    add iter, FLOAT4
+    mov tmp, iter
+    add tmp, FLOAT4
+    cmp tmp, row_bytes
+    jle copy_step_v_to_table
     
-;     mov c_iter, -1               ; neighbouring column offset = -1
+minus_one_cell:
+    sub iter, FLOAT
+    mov tmp, iter
+    add tmp, FLOAT4
+    cmp tmp, row_bytes
+    jg minus_one_cell
+    movups xmm0, [step_vector+iter]
+	movups [table+iter], xmm0
 
-; neighbour_c_loop:                ; neighbouring columns (c-1, c, c+1)    
-;     mov tmp, c
-;     add tmp, c_iter
-;     cmp tmp, 0
-;     jl next_neighbour_col        ; c + c_iter < 0 (out of bounds)
-;     cmp tmp, [COLS]
-;     jge next_neighbour_col       ; c + c_iter >= COLS (out of bounds)
 
-;     mov tmp, r                   ; calculating position of the neighbour in M
-;     add tmp, r_iter
-;     imul tmp, [COLS]
-;     add tmp, c
-;     add tmp, c_iter
-;     add tmp, curr_board
+    mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES
+rows_loop:
+    mov c, 0                               ; current column = 0 // IN BYTES
+cols_loop:
+    mov tmp, table
+    add tmp, r
+    add tmp, c
 
-;     cmp [table + tmp], BYTE '1'  ; check `is neighbour alive?`
-;     jne next_neighbour_col       ; not alive
-;     inc neighbours               ; alive => neighbours++
+	movups xmm0, [tmp] ; curr row
 
-; next_neighbour_col: 
-;     inc c_iter
-;     cmp c_iter, 1
-;     jle neighbour_c_loop
+    add tmp, 4
+	movd xmm2, [tmp]
+	shufps xmm2, xmm2, 0h
+	movaps xmm4, xmm2
+	; xmm2: r r r r ; r to ta *, current, aktualna komórka
+	; xmm4: r r r r
+    
+    sub tmp, [ROW_BYTES]
+    sub tmp, 4
+	movups xmm1, [tmp] ; prev row
 
-; next_neighbour_row:
-;     inc r_iter
-;     cmp r_iter, 1
-;     jle neighbour_r_loop
+    subps xmm4, xmm1 ; current - wagi, nwm czy ma być w tą czy w drugą TBH
+	subps xmm2, xmm0 ; substract from value in current cell
 
-; neighbours_counted:   
-;     mov tmp, r
-;     imul tmp, [COLS]
-;     add tmp, c
-;     add tmp, curr_board
+	addps xmm4, xmm2
+	mulps xmm4, xmm3 ; apply mask
+    movups [table], xmm4
 
-;     cmp [table + tmp], BYTE '1'  ; if we counted in alive cell itself => neighbours--
-;     jne eval_cell
-;     dec neighbours
+	haddps xmm4, xmm4 ; a b c d -> _ _ a+b c+d
+	haddps xmm4, xmm4 ; _ _ a+b c+d -> _ _ _ a+b+c+d
 
-; eval_cell:
-;     cmp neighbours, 3            ; 3 alive neighbours => cell alive
-;     je live
-;     cmp neighbours, 2            ; not 2 neighbours => cell dead
-;     jne die
-;     cmp [table + tmp], BYTE '1'  ; 2 neibours and cell was alive => cell alive
-;     je live
+    ; movups [table], xmm4
+    movd esi, xmm4
+    
+    mov tmp, table
+    add tmp, [TMP_OFFSET]
+    add tmp, r
+    add tmp, c
+    add tmp, 4
 
-;     die:                         ; write cell to next board as dead
-;     mov tmp, r
-;     imul tmp, [COLS]
-;     add tmp, c
-;     add tmp, next_board
+	; mov [tmp], DWORD 666
+	mov [tmp], esi
 
-;     mov [table + tmp], BYTE '0'
-;     jmp next
+next_col:
+    add c, FLOAT
+    mov tmp, [ROW_BYTES]
+    sub tmp, FLOAT
+    sub tmp, FLOAT
 
-;     live:                        ; write cell to next board as alive
-;     mov tmp, r
-;     imul tmp, [COLS]
-;     add tmp, c
-;     add tmp, next_board
+    cmp c, tmp
+    jl cols_loop
 
-;     mov [table + tmp], BYTE '1'
+next_row:
+    add r, [ROW_BYTES]
+    cmp r, [TMP_OFFSET]
+    jl rows_loop
 
-; next:                            ; go check next cell in column/row
-;     inc c
-;     cmp c, [COLS]
-;     jne cols_loop    
+    ; // TODO:
+    ; // iteruj się po wierszach r=1..odpowiedni
+    ; //    iteruj się po kolumnie c=1..odpowiednia
+    ; //       weź 3 komórki w wierszu r-1 [c-1,c,c+1]
+    ; //       weź 3 komórki w wierszu r [c-1,c,c+1]
+    ; //       ogarnij sumy ważone jak miało być i wpisz w odp. komórkę tmp
 
-;     inc r
-;     cmp r, [ROWS]
-;     jne rows_loop
 
-; next_step:
-;     dec steps
-;     cmp steps, 0
-;     jnz step_loop
 
-; finish:
+    ; // iteruj się po wierszach r=1..odpowiedni
+    ; //    iteruj się po kolumnie c=1..odpowiednia
+    ; //       dodaj tmp do oryginalnej tablicy
+
     mov    rsp, rbp              ; restore register values
     pop    rbp
 ;     pop    rbx
 ;     pop    r15
 ;     pop    r14
 ;     pop    r13
-;     pop    r12
+    pop    r8
     ret

@@ -22,7 +22,7 @@ void big_print(float* M, int colsM, int rowsM) {
     printf(" ");
     for (int j = 0; j < rowsM; j++) {
         for (int i = 0; i < colsM; i++) {
-            printf("[%2d] ", (i + j * colsM));
+            printf("[%3d] ", (i + j * colsM));
             printf("%f ", M[i + j * colsM]);
         }
         printf("\n ");
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     // }
 
     // file = fopen(argv[1], "r");
-    file = fopen("example2.txt", "r");
+    file = fopen("example.txt", "r");
     if (file == NULL) {
         printf("Error opening file %s\n", argv[1]);
         exit(EXIT_FAILURE);
@@ -136,15 +136,4 @@ int main(int argc, char* argv[]) {
     fclose(file);
 
     exit(EXIT_SUCCESS);
-
-    // TODO: asm
-    // ogarnij 0wy wiersz osobno
-    // iteruj się po wierszach r=1..odpowiedni
-    //    iteruj się po kolumnie c=1..odpowiednia
-    //       weź 3 komórki w wierszu r-1 [c-1,c,c+1]
-    //       weź 3 komórki w wierszu r [c-1,c,c+1]
-    //       ogarnij sumy ważone jak miało być i wpisz w odp. komórkę tmp
-    // iteruj się po wierszach r=1..odpowiedni
-    //    iteruj się po kolumnie c=1..odpowiednia
-    //       dodaj tmp do oryginalnej tablicy
 }
