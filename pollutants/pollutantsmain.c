@@ -37,6 +37,7 @@ void solve(float* M, float* step_vector, int colsM, int rowsM, float weight) {
     // }
     // big_print(M, colsM, rowsM);
 
+    int offset = colsM * (rowsM / 2 + 1);
     // TODO: ensure that number below is correct
     for (int j = 1; j < rowsM / 2 + 1; j++) {
         for (int i = 1; i < colsM - 1; i++) {
@@ -63,25 +64,27 @@ void solve(float* M, float* step_vector, int colsM, int rowsM, float weight) {
                 c -= M[i + ((j - 1) * colsM)];
             }
 
-            M[i + j * colsM] += c * weight;
+            M[i + j * colsM] -= c * weight;
+            M[i + j * colsM + offset] = -c * weight;
             // printf("[%2d] ", (i + j * colsM));
             // printf("%f ", M[i + j * colsM]);
         }
         // printf("\n");
     }
 }
+// TODO: przetestować ujemną wagę
 
 int main(int argc, char* argv[]) {
     // input file handling
     FILE* file;
 
-    // if (argc != 2) {
-    //     fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
-    //     exit(EXIT_FAILURE);
-    // }
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
 
-    // file = fopen(argv[1], "r");
-    file = fopen("example2.txt", "r");
+    file = fopen(argv[1], "r");
+    // file = fopen("example2.txt", "r");
     if (file == NULL) {
         printf("Error opening file %s\n", argv[1]);
         exit(EXIT_FAILURE);
@@ -122,8 +125,8 @@ int main(int argc, char* argv[]) {
     float TMP[sizeM];
 
     for (int i = 0; i < sizeM; i++) {
-        M[i] = 0;
-        TMP[i] = 0;
+        M[i] = 1;
+        TMP[i] = 1;
     }
 
     printf("rowsM = %d\n", rowsM);
@@ -154,7 +157,7 @@ int main(int argc, char* argv[]) {
 
     float step_vector[rowsM];
     for (int i = 0; i < colsM; i++) {
-        step_vector[i] = 0;
+        step_vector[i] = 1;
     }
 
     start(colsM, rowsM, M, weight);
@@ -178,11 +181,10 @@ int main(int argc, char* argv[]) {
         print(M, colsM, rowsM);
         big_print(M, colsM, rowsM);
 
-        printf("tmp:\n");
-        // big_print(TMP, colsM, rowsM);
+        // printf("tmp:\n");
         // solve(TMP, step_vector, colsM, rowsM, weight);
-        // big_print(TMP, colsM, rowsM);
         // print(TMP, colsM, rowsM);
+        // big_print(TMP, colsM, rowsM);
     }
 
     fclose(file);

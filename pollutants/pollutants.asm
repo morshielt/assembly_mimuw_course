@@ -204,7 +204,7 @@ next_col:
 next_row:
     add r, [ROW_BYTES]
     cmp r, [TMP_OFFSET]
-    jl rows_loop
+    jle rows_loop
 
 
 
@@ -224,13 +224,18 @@ cols_loop2:
 
 	movups xmm0, [tmp]
 	movups xmm1, [tmp2]
-	addps xmm0, xmm1
+	subps xmm0, xmm1
+	; subps xmm0, xmm0
 	movups [tmp], xmm0
 
 next_col2:
     add c, FLOAT4
-    cmp c, [ROW_BYTES]
-    jl cols_loop2
+    ; add c, FLOAT
+    mov tmp, [ROW_BYTES]
+    sub tmp, FLOAT
+    sub tmp, FLOAT
+    sub tmp, FLOAT
+    jle cols_loop2
     ; TODO: not 3 divisible ughrs
     ; najlepiej przepisać końcówkę ręcznie i jebać może?
 ; minus_one_cell2:
@@ -246,7 +251,7 @@ next_col2:
 next_row2:
     add r, [ROW_BYTES]
     cmp r, [TMP_OFFSET]
-    jl rows_loop2
+    jle rows_loop2
 
 
     ; // TODO:
