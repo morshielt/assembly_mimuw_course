@@ -30,6 +30,47 @@ void big_print(float* M, int colsM, int rowsM) {
     printf("\n");
 }
 
+// TODO:FIXME:: SOLVE jest źle w C, to jak w x86-64 ma być dobrze X D
+void solve(float* M, float* step_vector, int colsM, int rowsM, float weight) {
+    // for (int i = 1; i < colsM - 1; i++) {
+    //     M[i] = step_vector[i];
+    // }
+    // big_print(M, colsM, rowsM);
+
+    // TODO: ensure that number below is correct
+    for (int j = 1; j < rowsM / 2 + 1; j++) {
+        for (int i = 1; i < colsM - 1; i++) {
+            int c;
+            if (i == 1) {
+                c = M[i + j * colsM] * 4;
+                c -= M[i + j * colsM];
+                c -= M[i + j * colsM + 1];
+                c -= M[i + ((j - 1) * colsM) + 1];
+                c -= M[i + ((j - 1) * colsM)];
+            } else if (i == colsM - 2) {
+                c = M[i + j * colsM] * 4;
+                c -= M[i + j * colsM];
+                c -= M[i + j * colsM - 1];
+                c -= M[i + ((j - 1) * colsM) - 1];
+                c -= M[i + ((j - 1) * colsM)];
+            } else {
+                c = M[i + j * colsM] * 6;
+                c -= M[i + j * colsM];
+                c -= M[i + j * colsM - 1];
+                c -= M[i + j * colsM + 1];
+                c -= M[i + ((j - 1) * colsM) + 1];
+                c -= M[i + ((j - 1) * colsM) - 1];
+                c -= M[i + ((j - 1) * colsM)];
+            }
+
+            M[i + j * colsM] += c * weight;
+            // printf("[%2d] ", (i + j * colsM));
+            // printf("%f ", M[i + j * colsM]);
+        }
+        // printf("\n");
+    }
+}
+
 int main(int argc, char* argv[]) {
     // input file handling
     FILE* file;
@@ -40,7 +81,7 @@ int main(int argc, char* argv[]) {
     // }
 
     // file = fopen(argv[1], "r");
-    file = fopen("example.txt", "r");
+    file = fopen("example2.txt", "r");
     if (file == NULL) {
         printf("Error opening file %s\n", argv[1]);
         exit(EXIT_FAILURE);
@@ -78,9 +119,11 @@ int main(int argc, char* argv[]) {
     int rowsM = 1 + 2 * cols;
     int sizeM = colsM * rowsM;
     float M[sizeM];
+    float TMP[sizeM];
 
     for (int i = 0; i < sizeM; i++) {
         M[i] = 0;
+        TMP[i] = 0;
     }
 
     printf("rowsM = %d\n", rowsM);
@@ -95,6 +138,7 @@ int main(int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
             }
             M[i + j * colsM] = cell;
+            TMP[i + j * colsM] = cell;
         }
     }
 
@@ -126,13 +170,21 @@ int main(int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
             }
             step_vector[i] = cell;
+            TMP[i] = cell;
             printf("%f ", cell);
         }
         printf("0]\n");
         step(step_vector);
-        big_print(M, colsM, rowsM);
         print(M, colsM, rowsM);
+        big_print(M, colsM, rowsM);
+
+        printf("tmp:\n");
+        // big_print(TMP, colsM, rowsM);
+        // solve(TMP, step_vector, colsM, rowsM, weight);
+        // big_print(TMP, colsM, rowsM);
+        // print(TMP, colsM, rowsM);
     }
+
     fclose(file);
 
     exit(EXIT_SUCCESS);
