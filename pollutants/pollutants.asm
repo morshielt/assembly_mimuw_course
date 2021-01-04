@@ -15,6 +15,7 @@
 %define    row_bytes r12
 %define    tmp r13
 %define    tmp2 r9
+%define    tmp3 r10
 %define    r r14
 %define    c r15
 
@@ -51,10 +52,8 @@ start:
     mov rax, [ROWS]
     mov rdi, 2
     idiv rdi
-    ; inc rax
     imul rax, [COLS]
     imul rax, FLOAT
-    ; mov rax, QWORD 5
     mov [TMP_OFFSET], rax
 
     mov    rsp, rbp
@@ -208,10 +207,17 @@ next_row:
 
 
 
+
+
 sums_to_M:
     mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES
 rows_loop2:
     mov c, FLOAT                               ; current column = 0 // IN BYTES
+    mov tmp, [ROW_BYTES]
+    sub tmp, FLOAT4
+    sub tmp, FLOAT
+    cmp c, tmp
+    jg rest_cols
 cols_loop2:
     mov tmp, table
     add tmp, r
@@ -232,21 +238,59 @@ next_col2:
     add c, FLOAT4
     ; add c, FLOAT
     mov tmp, [ROW_BYTES]
+    sub tmp, FLOAT4
     sub tmp, FLOAT
-    sub tmp, FLOAT
-    sub tmp, FLOAT
+    cmp c, tmp
     jle cols_loop2
     ; TODO: not 3 divisible ughrs
     ; najlepiej przepisać końcówkę ręcznie i jebać może?
-; minus_one_cell2:
-;     sub iter, FLOAT
-;     mov tmp, iter
-;     add tmp, FLOAT4
-;     cmp tmp, row_bytes
-;     jg minus_one_cell2
+    
+    ; sub c, FLOAT4
+rest_cols:
+    mov tmp, [ROW_BYTES]
+    sub tmp, FLOAT
+    cmp c, tmp
+    jge next_row2
 
-;     movups xmm0, [step_vector+iter]
-; 	movups [table+iter], xmm0
+    mov tmp, table
+    add tmp, r
+    add tmp, c
+    ; mov tmp3, tmp
+    ; mov tmp, [tmp] 
+
+    mov tmp2, table
+    add tmp2, [TMP_OFFSET]
+    add tmp2, r
+    add tmp2, c
+    ; mov tmp2, [tmp2]
+
+
+	movups xmm0, [tmp]
+	movups xmm1, [tmp2]
+	; subps xmm0, xmm0
+    ; movups xmm3, xmm5
+    shufps xmm1, xmm1, 0h ; bierze [0..31] 4 razy
+	; mask: w w w w
+	xor eax, eax ; eax = 0
+    ; mov rax, [TMP_OFFSET]
+    ; mov rax, rsi
+	cvtsi2ss xmm1, eax ; weź 0 z eax
+	shufps xmm1, xmm1, 1h ; KUUUL, mi też są tylko trzy potrzebne XD
+
+
+	; mulps xmm1, xmm3 ; apply mask
+
+	subps xmm0, xmm1
+	movups [tmp], xmm0
+
+
+    ; mov tmp3, table
+    ; add tmp3, r
+    ; add tmp3, c
+	; mov [tmp3], tmp
+    
+    add c, FLOAT
+    jmp rest_cols
 
 next_row2:
     add r, [ROW_BYTES]
