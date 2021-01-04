@@ -1,26 +1,15 @@
-; %define    r r9                  ; current row
-; %define    r_iter r10             ; row iterator (-1/0/1)
-; %define    c r11                 ; current column
-; %define    c_iter r12            ; column iterator (-1/0/1)
-; %define    next_board r13        ; position in M where `next` board starts
-; %define    curr_board r14        ; position in M where the current board starts
-; %define    tmp r15               ; register used for calculating cell coordinates
-; %define    neighbours rbx        ; number of alive neighbours of a cell
+%define    FLOAT 4             ; 4 bytes in float
+%define    FLOAT4 16             ; 16 bytes is 4 floats
+
 %define    table r8             ; holds address of M
-%define    iter r9             ; holds address of M
-%define    step_vector r10            ; holds address of M
-%define    curr r11             ; holds address of M
-%define    FLOAT 4             ; holds address of M
-%define    FLOAT4 16             ; holds address of M
-%define    row_bytes r12
-%define    tmp r13
-%define    tmp2 r9
-%define    tmp3 r10
-%define    r r14
-%define    c r15
-
-; %define    steps rdi
-
+%define    row_bytes r9
+%define    step_vector r10            ; holds address of param (new input) of `step` call
+%define    iter r11             ; iterator for copying step_vector to M
+%define    tmp r12
+%define    tmp2 r13
+%define    r r14 ; current row
+%define    c r15 ; current column
+%define    weight_xmm xmm5
 global start, step
 
 section .bss
@@ -31,24 +20,22 @@ section .bss
     WEIGHT RESQ 1
     ROW_BYTES RESQ 1
     TMP_OFFSET RESQ 1
-; section .data
-;     CTR DQ 0
+
 section .text
 
 start:
     push    rbp
     mov     rbp, rsp
 
-    movups [WEIGHT], xmm0
-    movups xmm3, xmm0 ; mov 32bits
-    mov [COLS], rdi               ; save params
+    movups [WEIGHT], xmm0 ; save params
+    mov [COLS], rdi
     mov [ROWS], rsi
     mov [M], rdx
 
     imul rdi, FLOAT
-    mov [ROW_BYTES], rdi
+    mov [ROW_BYTES], rdi ; save number of bytes in a row
 
-    xor rdx, rdx
+    xor rdx, rdx    ; save offset of tmp part of matrix, where we'll save the increase/decrease
     mov rax, [ROWS]
     mov rdi, 2
     idiv rdi
@@ -58,52 +45,32 @@ start:
 
     mov    rsp, rbp
     pop    rbp
-
     ret
 
 step:
-    push    r8                   ; save registers
-;     push    r13
-;     push    r14
-;     push    r15
-;     push    rbx
+    push    r12                   ; save registers
+    push    r13
+    push    r14
+    push    r15
+
     push    rbp
     mov     rbp, rsp
 
-    mov [STEP_V], rdi               ; save params
-    mov step_vector, [STEP_V]
+    mov [STEP_V], rdi               ; save param
+    mov step_vector, [STEP_V] ; load addresses
     mov table, [M]
 
-    movd xmm3, [WEIGHT] ; mov 32bits
-    ; mov rax, 7
-    ; mov xmm3, rax ; mov 32bits
-	shufps xmm3, xmm3, 0h ; bierze [0..31] 4 razy
-	; mask: w w w w
-	xor eax, eax ; eax = 0
-    ; mov rax, [TMP_OFFSET]
-    ; mov rax, rsi
-	cvtsi2ss xmm3, eax ; weź 0 z eax i wsadź je jako 0.000000 pod xmm [0..31]
-	; mask: 0 w w w
-    movups xmm5, xmm3
-	; shufps xmm5, xmm3, 39h ; KUUUL, mi też są tylko trzy potrzebne XD
+    movd xmm3, [WEIGHT] 
+	shufps xmm3, xmm3, 0h ; ([weight][weight][weight][weight])
+	xor eax, eax
+	cvtsi2ss xmm3, eax ; ([0][weight][weight][weight])
+    movups weight_xmm, xmm3 ; save ([0][weight][weight][weight]) as default
 
-	; xmm3 - w w w 0
-    ; movups [table], xmm3
-    ; jmp finish
-
-
-
-
-    mov row_bytes, [COLS]
-    imul row_bytes, FLOAT
-
+    mov row_bytes, [ROW_BYTES] 
     mov iter, 0
-    ; TODO: wygląda jakby przepisywało dobrze ale chór wie bo mi się nie chce sprawdzać
-copy_step_v_to_table:
-    ; step_vector
 
-    ; // przepisz 0wy wiersz
-	movups xmm0, [step_vector+iter]
+copy_step_v_to_table:
+	movups xmm0, [step_vector+iter] ; copy step vector as first row of M
 	movups [table+iter], xmm0
 
     add iter, FLOAT4
@@ -112,20 +79,20 @@ copy_step_v_to_table:
     cmp tmp, row_bytes
     jl copy_step_v_to_table
     
-minus_one_cell:
-
-    sub iter, FLOAT
+copy_step_v_rest:
+    sub iter, FLOAT ; copy rest (when no. columns not divisible by 4)
     mov tmp, iter
     add tmp, FLOAT4
     cmp tmp, row_bytes
-    jg minus_one_cell
+    jg copy_step_v_rest
     movups xmm0, [step_vector+iter]
 	movups [table+iter], xmm0
 
 
-    mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES
+; calculating pollution
+    mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES (current row offset)
 rows_loop:
-    mov c, 0                               ; current column = 0 // IN BYTES
+    mov c, 0                               ; current column = 0 (IN BYTES)
 cols_loop:
     mov tmp, table
     add tmp, r
@@ -133,25 +100,23 @@ cols_loop:
 
 	movups xmm0, [tmp] ; curr row
 
-    add tmp, 4
+    add tmp, 4 ; curr cell
 	movd xmm2, [tmp]
-	shufps xmm2, xmm2, 0h
-	movaps xmm4, xmm2
-	; xmm2: r r r r ; r to ta *, current, aktualna komórka
-	; xmm4: r r r r
+	shufps xmm2, xmm2, 0h ; xmm2 = ([curr][curr][curr][curr])
+	movaps xmm4, xmm2  ; xmm4 = ([curr][curr][curr][curr])
     
     sub tmp, [ROW_BYTES]
     sub tmp, 4
-	movups xmm1, [tmp] ; prev row
+	movups xmm1, [tmp] ; previous row
 
-    subps xmm4, xmm1 ; current - wagi, nwm czy ma być w tą czy w drugą TBH
-	subps xmm2, xmm0 ; substract from value in current cell
+	subps xmm2, xmm0 ; substraction: current row neighbours
+    subps xmm4, xmm1 ; substraction: previous row neighbours
 
-	addps xmm4, xmm2
+	addps xmm4, xmm2 ; sum neighbour differences
 
-    movups xmm3, xmm5
+    movups xmm3, weight_xmm ; load default weight vector
 
-    cmp c, 0 ; left border
+    cmp c, 0 ; left border - set mask ([0][weight][weight][0])
     je mask_0110
     
     mov tmp, [ROW_BYTES]
@@ -159,34 +124,31 @@ cols_loop:
     sub tmp, FLOAT
     sub tmp, FLOAT
     cmp c, tmp
-    je mask_1100
+    je mask_1100 ; right border - set mask ([weight][weight][0][0])
 
-	shufps xmm3, xmm3, 39h ; KUUUL, mi też są tylko trzy potrzebne XD
+    mask_1110:
+	shufps xmm3, xmm3, 39h ; value not on the border - set mask ([weight][weight][weight][0])
     jmp continue
 
     mask_0110:
-	shufps xmm3, xmm3, 38h ; KUUUL, mi też są tylko trzy potrzebne XD
+	shufps xmm3, xmm3, 38h
     jmp continue
+
     mask_1100:
-	shufps xmm3, xmm3, 9h ; KUUUL, mi też są tylko trzy potrzebne XD
-    ; movups [table], xmm3
+	shufps xmm3, xmm3, 9h
 
 continue:
 	mulps xmm4, xmm3 ; apply mask
-	haddps xmm4, xmm4 ; a b c d -> _ _ a+b c+d
-	haddps xmm4, xmm4 ; _ _ a+b c+d -> _ _ _ a+b+c+d
+	haddps xmm4, xmm4 ; sum weighted differences
+	haddps xmm4, xmm4
 
-    ; movups [table], xmm4
-    movd esi, xmm4
-    
+    movd edi, xmm4 ; save sum float
     mov tmp, table
     add tmp, [TMP_OFFSET]
     add tmp, r
     add tmp, c
     add tmp, 4
-
-	; mov [tmp], DWORD 666
-	mov [tmp], esi
+	mov [tmp], edi
 
 next_col:
     add c, FLOAT
@@ -194,8 +156,6 @@ next_col:
     sub tmp, FLOAT
     sub tmp, FLOAT
     sub tmp, FLOAT
-    ; sub tmp, FLOAT
-    ; sub tmp, FLOAT
 
     cmp c, tmp
     jle cols_loop
@@ -206,89 +166,61 @@ next_row:
     jle rows_loop
 
 
-
-
-
+; update pollution values in M
 sums_to_M:
-    mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES
+    mov r, [ROW_BYTES]                     ; current row IN ROW_BYTES (current row offset)
 rows_loop2:
-    mov c, FLOAT                               ; current column = 0 // IN BYTES
+    mov c, FLOAT                               ; current column = 0 (IN BYTES)
     mov tmp, [ROW_BYTES]
     sub tmp, FLOAT4
     sub tmp, FLOAT
     cmp c, tmp
     jg rest_cols
 cols_loop2:
-    mov tmp, table
+    mov tmp, table ; load 4 cells of M
     add tmp, r
     add tmp, c
 
-    mov tmp2, table
+    mov tmp2, table ; load 4 cells of tmp (weighted differences sum)
     add tmp2, [TMP_OFFSET]
     add tmp2, r
     add tmp2, c
 
-	movups xmm0, [tmp]
+	movups xmm0, [tmp] ; update M with values in tmp
 	movups xmm1, [tmp2]
 	subps xmm0, xmm1
-	; subps xmm0, xmm0
 	movups [tmp], xmm0
-
 next_col2:
     add c, FLOAT4
-    ; add c, FLOAT
     mov tmp, [ROW_BYTES]
     sub tmp, FLOAT4
     sub tmp, FLOAT
     cmp c, tmp
     jle cols_loop2
-    ; TODO: not 3 divisible ughrs
-    ; najlepiej przepisać końcówkę ręcznie i jebać może?
-    
-    ; sub c, FLOAT4
 rest_cols:
-    mov tmp, [ROW_BYTES]
+    mov tmp, [ROW_BYTES] ; update last colmuns of M (when no. cols non divisible by 4)
     sub tmp, FLOAT
     cmp c, tmp
     jge next_row2
 
-    mov tmp, table
+    mov tmp, table ; load 4 cells of M
     add tmp, r
     add tmp, c
-    ; mov tmp3, tmp
-    ; mov tmp, [tmp] 
 
-    mov tmp2, table
+    mov tmp2, table ; load 4 cells of tmp (weighted differences sum)
     add tmp2, [TMP_OFFSET]
     add tmp2, r
     add tmp2, c
-    ; mov tmp2, [tmp2]
 
-
-	movups xmm0, [tmp]
+	movups xmm0, [tmp] ; update single M cell value
 	movups xmm1, [tmp2]
-	; subps xmm0, xmm0
-    ; movups xmm3, xmm5
-    shufps xmm1, xmm1, 0h ; bierze [0..31] 4 razy
-	; mask: w w w w
-	xor eax, eax ; eax = 0
-    ; mov rax, [TMP_OFFSET]
-    ; mov rax, rsi
-	cvtsi2ss xmm1, eax ; weź 0 z eax
-	shufps xmm1, xmm1, 1h ; KUUUL, mi też są tylko trzy potrzebne XD
-
-
-	; mulps xmm1, xmm3 ; apply mask
-
+    shufps xmm1, xmm1, 0h ; 
+	xor eax, eax
+	cvtsi2ss xmm1, eax
+	shufps xmm1, xmm1, 1h
 	subps xmm0, xmm1
 	movups [tmp], xmm0
 
-
-    ; mov tmp3, table
-    ; add tmp3, r
-    ; add tmp3, c
-	; mov [tmp3], tmp
-    
     add c, FLOAT
     jmp rest_cols
 
@@ -297,26 +229,11 @@ next_row2:
     cmp r, [TMP_OFFSET]
     jle rows_loop2
 
-
-    ; // TODO:
-    ; // iteruj się po wierszach r=1..odpowiedni
-    ; //    iteruj się po kolumnie c=1..odpowiednia
-    ; //       weź 3 komórki w wierszu r-1 [c-1,c,c+1]
-    ; //       weź 3 komórki w wierszu r [c-1,c,c+1]
-    ; //       ogarnij sumy ważone jak miało być i wpisz w odp. komórkę tmp
-
-
-
-    ; // iteruj się po wierszach r=1..odpowiedni
-    ; //    iteruj się po kolumnie c=1..odpowiednia
-    ; //       dodaj tmp do oryginalnej tablicy
-
 finish:
     mov    rsp, rbp              ; restore register values
     pop    rbp
-;     pop    rbx
-;     pop    r15
-;     pop    r14
-;     pop    r13
-    pop    r8
+    pop    r15
+    pop    r14
+    pop    r13
+    pop    r12
     ret
