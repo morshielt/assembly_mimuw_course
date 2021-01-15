@@ -3,17 +3,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-void ppm(unsigned char* M, int cols, int rows, unsigned char RGB_shift,
+void ppm(unsigned char* M, int rows, int cols, unsigned char RGB_shift,
          signed char change);
-
-// void generate_pgm(unsigned char* M, int size, int R, int G, int B);
 
 int main(int argc, char* argv[]) {
     // input file handling
     FILE *file, *output;
 
     if (argc != 4) {
-        fprintf(stderr, "Usage: %s <input_file>\n <R/G/B> <[-127;127]>",
+        fprintf(stderr, "Usage: %s <input_file> <R/G/B> <[-127;127]>\n",
                 argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -57,26 +55,48 @@ int main(int argc, char* argv[]) {
 
     // reading the matrix
     for (i = 0; i < size; i++) {
-        unsigned char pixel_third;
-        if (fscanf(file, "%hhu", &pixel_third) != 1) {
+        unsigned char pixel_component;
+        if (fscanf(file, "%hhu", &pixel_component) != 1) {
             printf("Error reading row %d\n", i / 3 / cols);
             exit(EXIT_FAILURE);
         }
-        M[i] = pixel_third;
+        M[i] = pixel_component;
     }
     fclose(file);
 
-    int r_multiplier = 77, g_multiplier = 151, b_multiplier = 28;
-    // generate_pgm(M, size, r_multiplier, g_multiplier, b_multiplier);
-    ppm(M, cols, rows, RGB_shift, change);
+    // call our assembly procedure
+    ppm(M, rows, cols, RGB_shift, change);
 
-    argv[1][strlen(argv[1]) - 5] = 'X';
-    printf("%s]\n", argv[1]);
-    if (!(output = fopen(argv[1], "w"))) {
+    // create new filename
+    char new_filename[strlen(argv[1]) + 1 + 1];
+
+    int fst_slash = 0;
+    i = strlen(argv[1]);
+    int j = i;
+    while (i > 0) {
+        if (argv[1][i - 1] == '/' && !fst_slash) {
+            fst_slash = 1;
+            new_filename[j] = 'Y';
+            i++;
+        } else {
+            new_filename[j] = argv[1][i - 1];
+        }
+        i--;
+        j--;
+    }
+
+    if (!fst_slash) {
+        new_filename[0] = 'Y';
+    }
+    new_filename[strlen(argv[1]) + 1] = '\0';
+
+    // open/create output file
+    if (!(output = fopen(new_filename, "w"))) {
         printf("Error fopen\n");
         exit(EXIT_FAILURE);
     }
 
+    // write new image to file
     fprintf(output, "P3\n%d %d\n%d\n", cols, rows, max_);
     for (i = 0; i < size; i++) {
         fprintf(output, "%hhu ", M[i]);

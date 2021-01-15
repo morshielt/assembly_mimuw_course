@@ -4,15 +4,16 @@
 @ r0 - M - array containing: 
 @   [R0][G0][B0][R1][G1][B1][R2][G2][B2]... 
 @   (three components separately for each pixel)
-@ r1 - number of columns
-@ r2 - number of rows
+@ r1 - number of rows
+@ r2 - number of columns
 @ r3 - chosen component (RGB_shift) (1/2/3)
 @ [fp, #4] - change (value to add to chosen component)
 
 .balign 4
 ppm:
     push {r11}
-	add r11, sp, #0
+    add r11, sp, #0
+    push {r4}
 
     sub r3, #1          @ shift is represeted by (1/2/3), but to get the offset in array we need to decrease it
     mul r4, r1, r2      @ r4 = cols * rows
@@ -49,6 +50,7 @@ _loop:
     b _loop
 
 _finish:
+	pop {r4}
     add sp, r11, #0
-	pop {r11}
+    pop {r11}
 	bx lr
